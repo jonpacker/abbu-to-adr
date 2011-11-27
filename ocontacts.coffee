@@ -6,6 +6,7 @@ path = require 'path'
 fs = require 'fs'
 
 mrTableName = "ZABCDMAILRECENT"
+migrationr = /^Migration.*\.abbu\.tbz$/
 
 abbu = path.normalize argv.i or argv._[0]
 contactsDir = path.join abbu, 'Metadata'
@@ -31,12 +32,35 @@ getMailRecents = (file, callback) ->
 excluded = (fileName) ->
   return not fileName.match /:ABPerson\.abcdp/
 
-getSavedContacts = (dir, callback) -> 
+getSavedContacts = (dir, callback, hasUntarred) -> 
   fs.readdir dir, (err, files) ->
     throw 'Malformed .abbu bundle (couldn\'t find Metadata directory)' if err
+  
+    parsedir = ->
+      parseFiles files, (err, contacts) ->
+        callback err, contacts 
     
-    parseFiles files, (err, contacts) ->
-      callback err, contacts 
+    return do parsedir if files.length > 3 or hasUntarred
+
+    # Otherwise we need to untar the archive.
+    untarMetadata (err) ->
+      throw err if err
+      getSavedContacts dir, callback, true
+    
+untarMetadata = (callback) ->
+  calledback = no
+  untar = (file) ->
+    calledback = yes
+    file = path.join abbu, file
+    tar = spawn 'tar', ['-C', abbu, '-xf', file]
+    tar.on 'exit', ->
+      callback null
+
+  # Need to find the file first
+  fs.readdir abbu, (err, files) ->
+    throw err if err
+    untar file for file in files when file.match migrationr
+    callback "Couldn't find migration" if not calledback
       
 # Parse files
 parseFiles = (files, callback) ->
@@ -63,6 +87,7 @@ parseFile = (file, callback) ->
   plutil.on 'exit', ->
     parsePlist xml, (err, plist) ->
       callback err, null if err
+      console.log plist[0].First, file
       callback null, readAbcdp plist[0]
 
 # Convert a .abcdp contact (in plist format) to a generic contact format
