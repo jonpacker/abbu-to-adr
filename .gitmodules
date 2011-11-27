@@ -1,3 +1,0 @@
-[submodule "vendor/node-plist"]
-	path = vendor/node-plist
-	url = https://github.com/TooTallNate/node-plist
